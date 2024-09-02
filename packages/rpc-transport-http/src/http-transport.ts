@@ -1,5 +1,5 @@
 import { SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, SolanaError } from '@solana/errors';
-import { RpcResponse, RpcTransport } from '@solana/rpc-spec';
+import { RpcRequest, RpcResponse, RpcTransport } from '@solana/rpc-spec';
 import { createRpcMessage } from '@solana/rpc-spec-types';
 import type Dispatcher from 'undici-types/dispatcher';
 
@@ -11,7 +11,9 @@ import {
 
 type Config = Readonly<{
     dispatcher_NODE_ONLY?: Dispatcher;
+    fromJson?: (rawResponse: string, request: RpcRequest) => RpcResponse;
     headers?: AllowedHttpRequestHeaders;
+    toJson?: (payload: unknown, request: RpcRequest) => string;
     url: string;
 }>;
 
@@ -33,7 +35,7 @@ export function createHttpTransport(config: Config): RpcTransport {
     if (__DEV__ && !__NODEJS__ && 'dispatcher_NODE_ONLY' in config) {
         warnDispatcherWasSuppliedInNonNodeEnvironment();
     }
-    const { headers, url } = config;
+    const { fromJson, headers, toJson, url } = config;
     if (__DEV__ && headers) {
         assertIsAllowedHttpRequestHeaders(headers);
     }
@@ -48,7 +50,7 @@ export function createHttpTransport(config: Config): RpcTransport {
         signal,
     }: Parameters<RpcTransport>[0]): Promise<RpcResponse<TResponse>> {
         const payload = createRpcMessage(methodName, params);
-        const body = JSON.stringify(payload);
+        const body = toJson ? toJson(payload, { methodName, params }) : JSON.stringify(payload);
         const requestInfo = {
             ...dispatcherConfig,
             body,
@@ -68,6 +70,9 @@ export function createHttpTransport(config: Config): RpcTransport {
                 message: response.statusText,
                 statusCode: response.status,
             });
+        }
+        if (fromJson) {
+            return fromJson(await response.text(), { methodName, params }) as TResponse;
         }
         return await response.json();
     };
