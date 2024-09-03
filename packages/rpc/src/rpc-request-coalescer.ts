@@ -1,12 +1,12 @@
-import type { RpcRequest, RpcResponse, RpcTransport } from '@solana/rpc-spec';
+import type { RpcTransport } from '@solana/rpc-spec';
 
 type CoalescedRequest = {
     readonly abortController: AbortController;
     numConsumers: number;
-    readonly responsePromise: Promise<RpcResponse | undefined>;
+    readonly responsePromise: Promise<unknown>;
 };
 
-type GetDeduplicationKeyFn = (request: RpcRequest) => string | undefined;
+type GetDeduplicationKeyFn = (payload: unknown) => string | undefined;
 
 // This used to be a `Symbol()`, but there's a bug in Node <21 where the `undici` library passes
 // the `reason` property of the `AbortSignal` straight to `Error.captureStackTrace()` without first
@@ -30,13 +30,11 @@ export function getRpcTransportWithRequestCoalescing<TTransport extends RpcTrans
     getDeduplicationKey: GetDeduplicationKeyFn,
 ): TTransport {
     let coalescedRequestsByDeduplicationKey: Record<string, CoalescedRequest> | undefined;
-    return async function makeCoalescedHttpRequest<TResponse>(
-        request: Parameters<RpcTransport>[0],
-    ): Promise<RpcResponse<TResponse>> {
-        const { methodName, params, signal } = request;
-        const deduplicationKey = getDeduplicationKey({ methodName, params });
+    return async function makeCoalescedHttpRequest<TResponse>(config: Parameters<RpcTransport>[0]): Promise<TResponse> {
+        const { payload, signal } = config;
+        const deduplicationKey = getDeduplicationKey(payload);
         if (deduplicationKey === undefined) {
-            return await transport(request);
+            return await transport(config);
         }
         if (!coalescedRequestsByDeduplicationKey) {
             Promise.resolve().then(() => {
@@ -49,7 +47,7 @@ export function getRpcTransportWithRequestCoalescing<TTransport extends RpcTrans
             const responsePromise = (async () => {
                 try {
                     return await transport<TResponse>({
-                        ...request,
+                        ...config,
                         signal: abortController.signal,
                     });
                 } catch (e) {
@@ -71,8 +69,8 @@ export function getRpcTransportWithRequestCoalescing<TTransport extends RpcTrans
         const coalescedRequest = coalescedRequestsByDeduplicationKey[deduplicationKey];
         coalescedRequest.numConsumers++;
         if (signal) {
-            const responsePromise = coalescedRequest.responsePromise as Promise<RpcResponse<TResponse>>;
-            return await new Promise<RpcResponse<TResponse>>((resolve, reject) => {
+            const responsePromise = coalescedRequest.responsePromise as Promise<TResponse>;
+            return await new Promise<TResponse>((resolve, reject) => {
                 const handleAbort = (e: AbortSignalEventMap['abort']) => {
                     signal.removeEventListener('abort', handleAbort);
                     coalescedRequest.numConsumers -= 1;
@@ -93,7 +91,7 @@ export function getRpcTransportWithRequestCoalescing<TTransport extends RpcTrans
                     });
             });
         } else {
-            return (await coalescedRequest.responsePromise) as RpcResponse<TResponse>;
+            return (await coalescedRequest.responsePromise) as TResponse;
         }
     } as TTransport;
 }

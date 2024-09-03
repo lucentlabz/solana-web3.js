@@ -1,6 +1,5 @@
 import { SOLANA_ERROR__RPC__TRANSPORT_HTTP_HEADER_FORBIDDEN, SolanaError } from '@solana/errors';
 import { RpcTransport } from '@solana/rpc-spec';
-import { createRpcMessage } from '@solana/rpc-spec-types';
 
 import { assertIsAllowedHttpRequestHeaders } from '../http-transport-headers';
 
@@ -82,7 +81,7 @@ describe('createHttpRequest with custom headers', () => {
             headers: { aCcEpT: 'text/html' },
             url: 'http://localhost',
         });
-        makeHttpRequest({ methodName: 'foo', params: 123 });
+        makeHttpRequest({ payload: 123 });
         expect(fetchSpy).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({
@@ -97,13 +96,12 @@ describe('createHttpRequest with custom headers', () => {
             headers: { 'cOnTeNt-LeNgTh': '420' },
             url: 'http://localhost',
         });
-        makeHttpRequest({ methodName: 'foo', params: 123 });
-        const expectedContentLength = JSON.stringify(createRpcMessage('foo', 123)).length;
+        makeHttpRequest({ payload: 123 });
         expect(fetchSpy).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({
                 headers: expect.objectContaining({
-                    'content-length': expectedContentLength.toString(),
+                    'content-length': '3',
                 }),
             }),
         );
@@ -113,7 +111,7 @@ describe('createHttpRequest with custom headers', () => {
             headers: { 'cOnTeNt-TyPe': 'text/html' },
             url: 'http://localhost',
         });
-        makeHttpRequest({ methodName: 'foo', params: 123 });
+        makeHttpRequest({ payload: 123 });
         expect(fetchSpy).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({

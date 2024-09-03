@@ -1,4 +1,4 @@
-import type { RpcResponse, RpcTransport } from '@solana/rpc-spec';
+import type { RpcTransport } from '@solana/rpc-spec';
 
 import { getRpcTransportWithRequestCoalescing } from '../rpc-request-coalescer';
 
@@ -17,23 +17,23 @@ describe('RPC request coalescer', () => {
             hashFn.mockReturnValue('samehash');
         });
         it('multiple requests in the same tick produce a single transport request', () => {
-            coalescedTransport({ methodName: 'foo', params: null });
-            coalescedTransport({ methodName: 'foo', params: null });
+            coalescedTransport({ payload: null });
+            coalescedTransport({ payload: null });
             expect(mockTransport).toHaveBeenCalledTimes(1);
         });
         it('multiple requests in different ticks each produce their own transport request', async () => {
             expect.assertions(1);
-            coalescedTransport({ methodName: 'foo', params: null });
+            coalescedTransport({ payload: null });
             await jest.runOnlyPendingTimersAsync();
-            coalescedTransport({ methodName: 'foo', params: null });
+            coalescedTransport({ payload: null });
             expect(mockTransport).toHaveBeenCalledTimes(2);
         });
         it('multiple requests in the same tick receive the same response', async () => {
             expect.assertions(2);
             const mockResponse = { response: 'ok' };
             mockTransport.mockResolvedValueOnce(mockResponse);
-            const responsePromiseA = coalescedTransport({ methodName: 'foo', params: null });
-            const responsePromiseB = coalescedTransport({ methodName: 'foo', params: null });
+            const responsePromiseA = coalescedTransport({ payload: null });
+            const responsePromiseB = coalescedTransport({ payload: null });
             await Promise.all([
                 expect(responsePromiseA).resolves.toBe(mockResponse),
                 expect(responsePromiseB).resolves.toBe(mockResponse),
@@ -45,9 +45,9 @@ describe('RPC request coalescer', () => {
             const mockResponseB = { response: 'okB' };
             mockTransport.mockResolvedValueOnce(mockResponseA);
             mockTransport.mockResolvedValueOnce(mockResponseB);
-            const responsePromiseA = coalescedTransport({ methodName: 'foo', params: null });
+            const responsePromiseA = coalescedTransport({ payload: null });
             await jest.runOnlyPendingTimersAsync();
-            const responsePromiseB = coalescedTransport({ methodName: 'foo', params: null });
+            const responsePromiseB = coalescedTransport({ payload: null });
             await Promise.all([
                 expect(responsePromiseA).resolves.toBe(mockResponseA),
                 expect(responsePromiseB).resolves.toBe(mockResponseB),
@@ -57,8 +57,8 @@ describe('RPC request coalescer', () => {
             expect.assertions(2);
             const mockError = { err: 'bad' };
             mockTransport.mockRejectedValueOnce(mockError);
-            const responsePromiseA = coalescedTransport({ methodName: 'foo', params: null });
-            const responsePromiseB = coalescedTransport({ methodName: 'foo', params: null });
+            const responsePromiseA = coalescedTransport({ payload: null });
+            const responsePromiseB = coalescedTransport({ payload: null });
             await Promise.all([
                 expect(responsePromiseA).rejects.toBe(mockError),
                 expect(responsePromiseB).rejects.toBe(mockError),
@@ -70,11 +70,11 @@ describe('RPC request coalescer', () => {
             const mockErrorB = { err: 'badB' };
             mockTransport.mockRejectedValueOnce(mockErrorA);
             mockTransport.mockRejectedValueOnce(mockErrorB);
-            const responsePromiseA = coalescedTransport({ methodName: 'foo', params: null });
+            const responsePromiseA = coalescedTransport({ payload: null });
             // eslint-disable-next-line jest/valid-expect
             const expectationA = expect(responsePromiseA).rejects.toBe(mockErrorA);
             await jest.runOnlyPendingTimersAsync();
-            const responsePromiseB = coalescedTransport({ methodName: 'foo', params: null });
+            const responsePromiseB = coalescedTransport({ payload: null });
             // eslint-disable-next-line jest/valid-expect
             const expectationB = expect(responsePromiseB).rejects.toBe(mockErrorB);
             await Promise.all([expectationA, expectationB]);
@@ -83,13 +83,13 @@ describe('RPC request coalescer', () => {
             expect.assertions(2);
             const abortControllerA = new AbortController();
             const abortControllerB = new AbortController();
-            coalescedTransport({ methodName: 'foo', params: null, signal: abortControllerA.signal }).catch(() => {});
-            coalescedTransport({ methodName: 'foo', params: null, signal: abortControllerB.signal }).catch(() => {});
+            coalescedTransport({ payload: null, signal: abortControllerA.signal }).catch(() => {});
+            coalescedTransport({ payload: null, signal: abortControllerB.signal }).catch(() => {});
             // Both abort, bringing the consumer count to zero.
             abortControllerA.abort('o no A');
             abortControllerB.abort('o no B');
             // New request comes in at the last moment before the end of the runloop.
-            coalescedTransport({ methodName: 'foo', params: null });
+            coalescedTransport({ payload: null });
             await jest.runOnlyPendingTimersAsync();
             expect(mockTransport).toHaveBeenCalledTimes(1);
             const transportAbortSignal = mockTransport.mock.lastCall![0].signal!;
@@ -100,7 +100,7 @@ describe('RPC request coalescer', () => {
             let abortControllerB: AbortController;
             let responsePromiseA: ReturnType<typeof mockTransport>;
             let responsePromiseB: ReturnType<typeof mockTransport>;
-            let transportResponsePromise: (value: RpcResponse<unknown>) => void;
+            let transportResponsePromise: (value: unknown) => void;
             beforeEach(() => {
                 abortControllerA = new AbortController();
                 abortControllerB = new AbortController();
@@ -113,16 +113,8 @@ describe('RPC request coalescer', () => {
                         });
                     });
                 });
-                responsePromiseA = coalescedTransport({
-                    methodName: 'foo',
-                    params: null,
-                    signal: abortControllerA.signal,
-                });
-                responsePromiseB = coalescedTransport({
-                    methodName: 'foo',
-                    params: null,
-                    signal: abortControllerB.signal,
-                });
+                responsePromiseA = coalescedTransport({ payload: null, signal: abortControllerA.signal });
+                responsePromiseB = coalescedTransport({ payload: null, signal: abortControllerB.signal });
             });
             afterEach(async () => {
                 try {
@@ -194,8 +186,8 @@ describe('RPC request coalescer', () => {
                 hashFn.mockImplementation(getHashFn());
             });
             it('multiple requests in the same tick produce one transport request each', () => {
-                coalescedTransport({ methodName: 'foo', params: null });
-                coalescedTransport({ methodName: 'foo', params: null });
+                coalescedTransport({ payload: null });
+                coalescedTransport({ payload: null });
                 expect(mockTransport).toHaveBeenCalledTimes(2);
             });
             it('multiple requests in the same tick receive different responses', async () => {
@@ -204,8 +196,8 @@ describe('RPC request coalescer', () => {
                 const mockResponseB = { response: 'okB' };
                 mockTransport.mockResolvedValueOnce(mockResponseA);
                 mockTransport.mockResolvedValueOnce(mockResponseB);
-                const responsePromiseA = coalescedTransport({ methodName: 'foo', params: null });
-                const responsePromiseB = coalescedTransport({ methodName: 'foo', params: null });
+                const responsePromiseA = coalescedTransport({ payload: null });
+                const responsePromiseB = coalescedTransport({ payload: null });
                 await Promise.all([
                     expect(responsePromiseA).resolves.toBe(mockResponseA),
                     expect(responsePromiseB).resolves.toBe(mockResponseB),
@@ -217,8 +209,8 @@ describe('RPC request coalescer', () => {
                 const mockErrorB = { err: 'badB' };
                 mockTransport.mockRejectedValueOnce(mockErrorA);
                 mockTransport.mockRejectedValueOnce(mockErrorB);
-                const responsePromiseA = coalescedTransport({ methodName: 'foo', params: null });
-                const responsePromiseB = coalescedTransport({ methodName: 'foo', params: null });
+                const responsePromiseA = coalescedTransport({ payload: null });
+                const responsePromiseB = coalescedTransport({ payload: null });
                 await Promise.all([
                     expect(responsePromiseA).rejects.toBe(mockErrorA),
                     expect(responsePromiseB).rejects.toBe(mockErrorB),
@@ -236,15 +228,15 @@ describe('RPC request coalescer', () => {
             expect.assertions(1);
             const mockError = { err: 'bad' };
             mockTransport.mockRejectedValueOnce(mockError);
-            await expect(coalescedTransport({ methodName: 'foo', params: null })).rejects.toBe(mockError);
+            await expect(coalescedTransport({ payload: null })).rejects.toBe(mockError);
         });
         it('throws an error in the case of failure, if it was configured with an `AbortSignal`', async () => {
             expect.assertions(1);
             const mockError = { err: 'bad' };
             mockTransport.mockRejectedValueOnce(mockError);
-            await expect(
-                coalescedTransport({ methodName: 'foo', params: null, signal: new AbortController().signal }),
-            ).rejects.toBe(mockError);
+            await expect(coalescedTransport({ payload: null, signal: new AbortController().signal })).rejects.toBe(
+                mockError,
+            );
         });
     });
 });

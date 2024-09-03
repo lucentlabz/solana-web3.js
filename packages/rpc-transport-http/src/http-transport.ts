@@ -1,6 +1,5 @@
 import { SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, SolanaError } from '@solana/errors';
-import { RpcRequest, RpcResponse, RpcTransport } from '@solana/rpc-spec';
-import { createRpcMessage } from '@solana/rpc-spec-types';
+import { RpcTransport } from '@solana/rpc-spec';
 import type Dispatcher from 'undici-types/dispatcher';
 
 import {
@@ -11,9 +10,7 @@ import {
 
 type Config = Readonly<{
     dispatcher_NODE_ONLY?: Dispatcher;
-    fromJson?: (rawResponse: string, request: RpcRequest) => RpcResponse;
     headers?: AllowedHttpRequestHeaders;
-    toJson?: (payload: unknown, request: RpcRequest) => string;
     url: string;
 }>;
 
@@ -35,7 +32,7 @@ export function createHttpTransport(config: Config): RpcTransport {
     if (__DEV__ && !__NODEJS__ && 'dispatcher_NODE_ONLY' in config) {
         warnDispatcherWasSuppliedInNonNodeEnvironment();
     }
-    const { fromJson, headers, toJson, url } = config;
+    const { headers, url } = config;
     if (__DEV__ && headers) {
         assertIsAllowedHttpRequestHeaders(headers);
     }
@@ -45,12 +42,10 @@ export function createHttpTransport(config: Config): RpcTransport {
     }
     const customHeaders = headers && normalizeHeaders(headers);
     return async function makeHttpRequest<TResponse>({
-        methodName,
-        params,
+        payload,
         signal,
-    }: Parameters<RpcTransport>[0]): Promise<RpcResponse<TResponse>> {
-        const payload = createRpcMessage(methodName, params);
-        const body = toJson ? toJson(payload, { methodName, params }) : JSON.stringify(payload);
+    }: Parameters<RpcTransport>[0]): Promise<TResponse> {
+        const body = JSON.stringify(payload);
         const requestInfo = {
             ...dispatcherConfig,
             body,
@@ -71,9 +66,6 @@ export function createHttpTransport(config: Config): RpcTransport {
                 statusCode: response.status,
             });
         }
-        if (fromJson) {
-            return fromJson(await response.text(), { methodName, params }) as TResponse;
-        }
-        return await response.json();
+        return (await response.json()) as TResponse;
     };
 }

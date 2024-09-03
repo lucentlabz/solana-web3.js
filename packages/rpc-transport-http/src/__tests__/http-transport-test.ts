@@ -1,6 +1,5 @@
 import { SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, SolanaError } from '@solana/errors';
 import { RpcTransport } from '@solana/rpc-spec';
-import { createRpcMessage } from '@solana/rpc-spec-types';
 
 // HACK: Pierce the veil of `jest.isolateModules` so that the modules inside get the same version of
 //       `@solana/errors` that is imported above.
@@ -29,7 +28,7 @@ describe('createHttpTransport', () => {
         });
         it('throws HTTP errors', async () => {
             expect.assertions(1);
-            const requestPromise = makeHttpRequest({ methodName: 'foo', params: 123 });
+            const requestPromise = makeHttpRequest({ payload: 123 });
             await expect(requestPromise).rejects.toThrow(
                 new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, {
                     message: 'We looked everywhere',
@@ -44,9 +43,7 @@ describe('createHttpTransport', () => {
         });
         it('passes the exception through', async () => {
             expect.assertions(1);
-            await expect(makeHttpRequest({ methodName: 'foo', params: 123 })).rejects.toThrow(
-                new TypeError('Failed to fetch'),
-            );
+            await expect(makeHttpRequest({ payload: 123 })).rejects.toThrow(new TypeError('Failed to fetch'));
         });
     });
     describe('when the endpoint returns a well-formed JSON response', () => {
@@ -57,20 +54,20 @@ describe('createHttpTransport', () => {
             });
         });
         it('calls fetch with the specified URL', () => {
-            makeHttpRequest({ methodName: 'foo', params: 123 });
+            makeHttpRequest({ payload: 123 });
             expect(fetchSpy).toHaveBeenCalledWith('http://localhost', expect.anything());
         });
         it('sets the `body` to a stringfied version of the payload', () => {
-            makeHttpRequest({ methodName: 'foo', params: { ok: true } });
+            makeHttpRequest({ payload: { ok: true } });
             expect(fetchSpy).toHaveBeenCalledWith(
                 expect.anything(),
                 expect.objectContaining({
-                    body: JSON.stringify(createRpcMessage('foo', { ok: true })),
+                    body: JSON.stringify({ ok: true }),
                 }),
             );
         });
         it('sets the accept header to `application/json`', () => {
-            makeHttpRequest({ methodName: 'foo', params: 123 });
+            makeHttpRequest({ payload: 123 });
             expect(fetchSpy).toHaveBeenCalledWith(
                 expect.anything(),
                 expect.objectContaining({
@@ -81,7 +78,7 @@ describe('createHttpTransport', () => {
             );
         });
         it('sets the content type header to `application/json; charset=utf-8`', () => {
-            makeHttpRequest({ methodName: 'foo', params: 123 });
+            makeHttpRequest({ payload: 123 });
             expect(fetchSpy).toHaveBeenCalledWith(
                 expect.anything(),
                 expect.objectContaining({
@@ -92,9 +89,8 @@ describe('createHttpTransport', () => {
             );
         });
         it('sets the content length header to the length of the JSON-stringified payload', () => {
-            const request = {
-                methodName: 'foo',
-                params:
+            makeHttpRequest({
+                payload:
                     // Shruggie: https://emojipedia.org/person-shrugging/
                     '\xAF\\\x5F\x28\u30C4\x29\x5F\x2F\xAF' +
                     ' ' +
@@ -103,20 +99,18 @@ describe('createHttpTransport', () => {
                     ' ' +
                     // https://tinyurl.com/bdemuf3r
                     '\u{1F469}\u{1F3FB}\u200D\u2764\uFE0F\u200D\u{1F469}\u{1F3FF}',
-            };
-            makeHttpRequest(request);
-            const expectedContentLength = JSON.stringify(createRpcMessage(request.methodName, request.params)).length;
+            });
             expect(fetchSpy).toHaveBeenCalledWith(
                 expect.anything(),
                 expect.objectContaining({
                     headers: expect.objectContaining({
-                        'content-length': expectedContentLength.toString(),
+                        'content-length': '30',
                     }),
                 }),
             );
         });
         it('sets the `method` to `POST`', () => {
-            makeHttpRequest({ methodName: 'foo', params: 123 });
+            makeHttpRequest({ payload: 123 });
             expect(fetchSpy).toHaveBeenCalledWith(
                 expect.anything(),
                 expect.objectContaining({

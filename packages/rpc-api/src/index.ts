@@ -1,14 +1,14 @@
 import { createRpcApi, RpcApi } from '@solana/rpc-spec';
 import {
     AllowedNumericKeypaths,
-    getDefaultRequestTransformerForSolanaRpc,
+    getDefaultParamsTransformerForSolanaRpc,
     getDefaultResponseTransformerForSolanaRpc,
     innerInstructionsConfigs,
     jsonParsedAccountsConfigs,
     jsonParsedTokenAccountsConfigs,
     KEYPATH_WILDCARD,
     messageConfig,
-    RequestTransformerConfig,
+    ParamsTransformerConfig,
 } from '@solana/rpc-transformers';
 
 import { GetAccountInfoApi } from './getAccountInfo';
@@ -179,13 +179,13 @@ export type {
     SimulateTransactionApi,
 };
 
-type Config = RequestTransformerConfig;
+type Config = ParamsTransformerConfig;
 
 export function createSolanaRpcApi<
     TRpcMethods extends SolanaRpcApi | SolanaRpcApiDevnet | SolanaRpcApiMainnet | SolanaRpcApiTestnet = SolanaRpcApi,
 >(config?: Config): RpcApi<TRpcMethods> {
     return createRpcApi<TRpcMethods>({
-        requestTransformer: getDefaultRequestTransformerForSolanaRpc(config),
+        parametersTransformer: getDefaultParamsTransformerForSolanaRpc(config) as (params: unknown[]) => unknown[],
         responseTransformer: getDefaultResponseTransformerForSolanaRpc({
             allowedNumericKeyPaths: getAllowedNumericKeypaths(),
         }),

@@ -1,22 +1,18 @@
 import { Callable } from '@solana/rpc-spec-types';
 
-import { RpcRequest, RpcRequestTransformer, RpcResponseTransformer } from './rpc-shared';
+import { RpcRequest } from './rpc-request';
 
 export type RpcApiConfig = Readonly<{
-    requestTransformer?: RpcRequestTransformer;
-    responseTransformer?: RpcResponseTransformer;
+    parametersTransformer?: <T extends unknown[]>(params: T, methodName: string) => unknown;
+    responseTransformer?: <T>(response: unknown, methodName?: string) => T;
 }>;
-
-export type RpcApiRequestPlan<TResponse> = RpcRequest & {
-    responseTransformer?: RpcResponseTransformer<TResponse>;
-};
 
 export type RpcApi<TRpcMethods> = {
     [MethodName in keyof TRpcMethods]: RpcReturnTypeMapper<TRpcMethods[MethodName]>;
 };
 
 type RpcReturnTypeMapper<TRpcMethod> = TRpcMethod extends Callable
-    ? (...rawParams: unknown[]) => RpcApiRequestPlan<ReturnType<TRpcMethod>>
+    ? (...rawParams: unknown[]) => RpcRequest<ReturnType<TRpcMethod>>
     : never;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,21 +38,18 @@ export function createRpcApi<TRpcMethods extends RpcApiMethods>(config?: RpcApiC
                 ...rawParams: Parameters<
                     TRpcMethods[TMethodName] extends CallableFunction ? TRpcMethods[TMethodName] : never
                 >
-            ): RpcApiRequestPlan<ReturnType<TRpcMethods[TMethodName]>> {
-                const rawRequest = { methodName, params: rawParams };
-                const request = config?.requestTransformer
-                    ? config?.requestTransformer(Object.freeze(rawRequest))
-                    : rawRequest;
-                return Object.freeze({
-                    ...request,
-                    ...(config?.responseTransformer
-                        ? {
-                              responseTransformer: config.responseTransformer as RpcResponseTransformer<
-                                  ReturnType<TRpcMethods[TMethodName]>
-                              >,
-                          }
-                        : {}),
-                });
+            ): RpcRequest<ReturnType<TRpcMethods[TMethodName]>> {
+                const params = config?.parametersTransformer
+                    ? config?.parametersTransformer(rawParams, methodName)
+                    : rawParams;
+                const responseTransformer = config?.responseTransformer
+                    ? config?.responseTransformer<ReturnType<TRpcMethods[TMethodName]>>
+                    : (rawResponse: unknown) => rawResponse as ReturnType<TRpcMethods[TMethodName]>;
+                return {
+                    methodName,
+                    params,
+                    responseTransformer,
+                };
             };
         },
     });

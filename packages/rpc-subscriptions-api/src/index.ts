@@ -5,11 +5,11 @@ import {
 } from '@solana/rpc-subscriptions-spec';
 import {
     AllowedNumericKeypaths,
-    getDefaultRequestTransformerForSolanaRpc,
-    getDefaultResponseTransformerForSolanaRpcSubscriptions,
+    getDefaultParamsTransformerForSolanaRpc,
+    getDefaultResponseTransformerForSolanaRpc,
     jsonParsedAccountsConfigs,
     KEYPATH_WILDCARD,
-    RequestTransformerConfig,
+    ParamsTransformerConfig,
 } from '@solana/rpc-transformers';
 
 import { AccountNotificationsApi } from './account-notifications';
@@ -44,18 +44,14 @@ export type {
     VoteNotificationsApi,
 };
 
-type Config = RequestTransformerConfig;
+type Config = ParamsTransformerConfig;
 
 function createSolanaRpcSubscriptionsApi_INTERNAL<TApi extends RpcSubscriptionsApiMethods>(
     config?: Config,
 ): RpcSubscriptionsApi<TApi> {
     return createRpcSubscriptionsApi<TApi>({
-        // TODO(loris): Replace with request transformer.
-        parametersTransformer: <T extends unknown[]>(params: T, notificationName: string) => {
-            return getDefaultRequestTransformerForSolanaRpc(config)({ methodName: notificationName, params })
-                .params as unknown[];
-        },
-        responseTransformer: getDefaultResponseTransformerForSolanaRpcSubscriptions({
+        parametersTransformer: getDefaultParamsTransformerForSolanaRpc(config) as (params: unknown[]) => unknown[],
+        responseTransformer: getDefaultResponseTransformerForSolanaRpc({
             allowedNumericKeyPaths: getAllowedNumericKeypaths(),
         }),
         subscribeNotificationNameTransformer: (notificationName: string) =>

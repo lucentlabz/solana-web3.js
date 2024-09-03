@@ -27,10 +27,8 @@ import { createHttpTransport } from '@solana/rpc-transport-http';
 
 const transport = createHttpTransport({ url: 'https://api.mainnet-beta.solana.com' });
 const response = await transport({
-    methodName: 'getSlot',
-    params: [],
+    payload: { id: 1, jsonrpc: '2.0', method: 'getSlot' },
 });
-const data = await response.json();
 ```
 
 #### Config
@@ -67,20 +65,20 @@ const transport = createHttpTransport({
     dispatcher_NODE_ONLY: dispatcher,
     url: 'https://mypool',
 });
+let id = 0;
 const balances = await Promise.allSettled(
-    accounts.map(async account => {
-        const response = await transport({
-            methodName: 'getBalance',
-            params: [account],
-        });
-        return await response.json();
-    }),
+    accounts.map(account =>
+        transport({
+            payload: {
+                id: ++id,
+                jsonrpc: '2.0',
+                method: 'getBalance',
+                params: [account],
+            },
+        }),
+    ),
 );
 ```
-
-##### `fromJson`
-
-An optional function that takes the response as a JSON string and converts it to a JSON value. The RPC request object is also provided as a second argument. When not provided, the JSON value will be accessed via the `response.json()` method of the fetch API.
 
 ##### `headers`
 
@@ -98,21 +96,9 @@ const transport = createHttpTransport({
 });
 ```
 
-##### `toJson`
-
-An optional function that takes the request payload and converts it to a JSON string. The RPC request object is also provided as a second argument. When not provided, `JSON.stringify` will be used.
-
 ##### `url`
 
 A string representing the target endpoint. In Node, it must be an absolute URL using the `http` or `https` protocol.
-
-### `createHttpTransportForSolanaRpc()`
-
-Creates an `RpcTransport` that uses JSON HTTP requests — much like the `createHttpTransport` function — except that it also uses custom `toJson` and `fromJson` functions in order to allow `bigint` values to be serialized and deserialized correctly over the wire.
-
-Since this is something specific to the Solana RPC API, these custom JSON functions are only triggered when the request is recognized as a Solana RPC request. Normal RPC APIs should aim to wrap their `bigint` values — e.g. `u64` or `i64` — in special value objects that represent the number as a string to avoid numerical values going above `Number.MAX_SAFE_INTEGER`.
-
-It has the same configuration options as `createHttpTransport`, but without the `fromJson` and `toJson` options.
 
 ## Augmenting Transports
 
@@ -123,7 +109,7 @@ Using this core transport, you can implement specialized functionality for lever
 Here’s an example of how someone might implement a “round robin” approach to distribute requests to multiple transports:
 
 ```ts
-import { RpcResponse, RpcTransport } from '@solana/rpc-spec';
+import { RpcTransport } from '@solana/rpc-spec';
 import { createHttpTransport } from '@solana/rpc-transport-http';
 
 // Create a transport for each RPC server
@@ -135,7 +121,7 @@ const transports = [
 
 // Create a wrapper transport that distributes requests to them
 let nextTransport = 0;
-async function roundRobinTransport<TResponse>(...args: Parameters<RpcTransport>): Promise<RpcResponse<TResponse>> {
+async function roundRobinTransport<TResponse>(...args: Parameters<RpcTransport>): Promise<TResponse> {
     const transport = transports[nextTransport];
     nextTransport = (nextTransport + 1) % transports.length;
     return await transport(...args);
@@ -149,7 +135,7 @@ Another example of a possible customization for a transport is to shard requests
 Perhaps your application needs to make a large number of requests, or needs to fan request for different methods out to different servers. Here’s an example of an implementation that does the latter:
 
 ```ts
-import { RpcResponse, RpcTransport } from '@solana/rpc-spec';
+import { RpcTransport } from '@solana/rpc-spec';
 import { createHttpTransport } from '@solana/rpc-transport-http';
 
 // Create multiple transports
@@ -174,7 +160,7 @@ function selectShard(method: string): RpcTransport {
     }
 }
 
-async function shardingTransport<TResponse>(...args: Parameters<RpcTransport>): Promise<RpcResponse<TResponse>> {
+async function shardingTransport<TResponse>(...args: Parameters<RpcTransport>): Promise<TResponse> {
     const payload = args[0].payload as { method: string };
     const selectedTransport = selectShard(payload.method);
     return await selectedTransport(...args);
@@ -186,7 +172,7 @@ async function shardingTransport<TResponse>(...args: Parameters<RpcTransport>): 
 The transport library can also be used to implement custom retry logic on any request:
 
 ```ts
-import { RpcResponse, RpcTransport } from '@solana/rpc-spec';
+import { RpcTransport } from '@solana/rpc-spec';
 import { createHttpTransport } from '@solana/rpc-transport-http';
 
 // Set the maximum number of attempts to retry a request
@@ -207,7 +193,7 @@ function calculateRetryDelay(attempt: number): number {
 }
 
 // A retrying transport that will retry up to `MAX_ATTEMPTS` times before failing
-async function retryingTransport<TResponse>(...args: Parameters<RpcTransport>): Promise<RpcResponse<TResponse>> {
+async function retryingTransport<TResponse>(...args: Parameters<RpcTransport>): Promise<TResponse> {
     let requestError;
     for (let attempts = 0; attempts < MAX_ATTEMPTS; attempts++) {
         try {
@@ -230,7 +216,7 @@ async function retryingTransport<TResponse>(...args: Parameters<RpcTransport>): 
 Here’s an example of some failover logic integrated into a transport:
 
 ```ts
-import { RpcResponse, RpcTransport } from '@solana/rpc-spec';
+import { RpcTransport } from '@solana/rpc-spec';
 import { createHttpTransport } from '@solana/rpc-transport-http';
 
 // Create a transport for each RPC server
@@ -241,7 +227,7 @@ const transports = [
 ];
 
 // A failover transport that will try each transport in order until one succeeds before failing
-async function failoverTransport<TResponse>(...args: Parameters<RpcTransport>): Promise<RpcResponse<TResponse>> {
+async function failoverTransport<TResponse>(...args: Parameters<RpcTransport>): Promise<TResponse> {
     let requestError;
 
     for (const transport of transports) {

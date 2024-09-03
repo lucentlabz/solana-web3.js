@@ -1,0 +1,3 @@
+[submodule "solana-web3.js"]
+	path = solana-web3.js
+	url = git@github.com:lucentlabz/solana-web3.js.git

@@ -9,7 +9,7 @@ import {
     createRpcMessage,
     Flatten,
     OverloadImplementations,
-    RpcResponseData,
+    RpcResponse,
     UnionToIntersection,
 } from '@solana/rpc-spec-types';
 
@@ -155,7 +155,7 @@ function createPendingRpcSubscription<
              * STEP 2: Wait for the acknowledgement from the server with the subscription id.
              */
             for await (const message of connection as AsyncIterable<
-                RpcNotification<unknown> | RpcResponseData<RpcSubscriptionId>
+                RpcNotification<unknown> | RpcResponse<RpcSubscriptionId>
             >) {
                 if ('id' in message && message.id === subscribeMessage.id) {
                     if ('error' in message) {
@@ -175,7 +175,7 @@ function createPendingRpcSubscription<
             return {
                 async *[Symbol.asyncIterator]() {
                     for await (const message of connection as AsyncIterable<
-                        RpcNotification<unknown> | RpcResponseData<RpcSubscriptionId>
+                        RpcNotification<unknown> | RpcResponse<RpcSubscriptionId>
                     >) {
                         if (!('params' in message) || message.params.subscription !== subscriptionId) {
                             continue;

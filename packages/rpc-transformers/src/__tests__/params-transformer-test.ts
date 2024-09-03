@@ -1,22 +1,19 @@
-import type { RpcRequestTransformer } from '@solana/rpc-spec';
 import type { Commitment } from '@solana/rpc-types';
 
-import { getDefaultRequestTransformerForSolanaRpc } from '../request-transformer';
-import { OPTIONS_OBJECT_POSITION_BY_METHOD } from '../request-transformer-options-object-position-config';
+import { getDefaultParamsTransformerForSolanaRpc } from '../params-transformer';
+import { OPTIONS_OBJECT_POSITION_BY_METHOD } from '../params-transformer-options-object-position-config';
 
-describe('getDefaultRequestTransformerForSolanaRpc', () => {
+describe('getDefaultParamsTransformerForSolanaRpc', () => {
     describe('given no config', () => {
-        let createRequest: (params: unknown) => { methodName: 'getFoo'; params: unknown };
-        let requestTransformer: RpcRequestTransformer;
+        let paramsTransformer: (value: unknown) => unknown;
         beforeEach(() => {
-            createRequest = params => ({ methodName: 'getFoo', params });
-            requestTransformer = getDefaultRequestTransformerForSolanaRpc();
+            const patcher = getDefaultParamsTransformerForSolanaRpc();
+            paramsTransformer = value => patcher(value, 'getFoo' /* methodName */);
         });
         describe('given an array as input', () => {
             const input = [10n, 10, '10', ['10', [10, 10n], 10n]] as const;
             it('casts the bigints in the array to a `number`, recursively', () => {
-                const request = createRequest(input);
-                expect(requestTransformer(request).params).toStrictEqual([
+                expect(paramsTransformer(input)).toStrictEqual([
                     Number(input[0]),
                     input[1],
                     input[2],
@@ -27,8 +24,7 @@ describe('getDefaultRequestTransformerForSolanaRpc', () => {
         describe('given an object as input', () => {
             const input = { a: 10n, b: 10, c: { c1: '10', c2: 10n } } as const;
             it('casts the bigints in the array to a `number`, recursively', () => {
-                const request = createRequest(input);
-                expect(requestTransformer(request).params).toStrictEqual({
+                expect(paramsTransformer(input)).toStrictEqual({
                     a: Number(input.a),
                     b: input.b,
                     c: { c1: input.c.c1, c2: Number(input.c.c2) },
@@ -89,53 +85,49 @@ describe('getDefaultRequestTransformerForSolanaRpc', () => {
         describe.each(['processed', 'confirmed'] as Commitment[])(
             'with the default commitment set to `%s`',
             defaultCommitment => {
-                let requestTransformer: RpcRequestTransformer;
+                let patcher: ReturnType<typeof getDefaultParamsTransformerForSolanaRpc>;
                 beforeEach(() => {
-                    requestTransformer = getDefaultRequestTransformerForSolanaRpc({ defaultCommitment });
+                    patcher = getDefaultParamsTransformerForSolanaRpc({ defaultCommitment });
                 });
                 it.each(METHODS_SUBJECT_TO_COMMITMENT_DEFAULTING)(
                     'adds a default commitment on calls for `%s`',
                     methodName => {
-                        expect(requestTransformer({ methodName, params: [] }).params).toContainEqual({
-                            commitment: defaultCommitment,
-                        });
+                        expect(patcher([], methodName)).toContainEqual({ commitment: defaultCommitment });
                     },
                 );
                 it('adds a default preflight commitment on calls to `sendTransaction`', () => {
-                    expect(requestTransformer({ methodName: 'sendTransaction', params: [] }).params).toContainEqual({
-                        preflightCommitment: defaultCommitment,
-                    });
+                    expect(patcher([], 'sendTransaction')).toContainEqual({ preflightCommitment: defaultCommitment });
                 });
             },
         );
         describe('with the default commitment set to `finalized`', () => {
-            let requestTransformer: RpcRequestTransformer;
+            let patcher: ReturnType<typeof getDefaultParamsTransformerForSolanaRpc>;
             beforeEach(() => {
-                requestTransformer = getDefaultRequestTransformerForSolanaRpc({ defaultCommitment: 'finalized' });
+                patcher = getDefaultParamsTransformerForSolanaRpc({ defaultCommitment: 'finalized' });
             });
             it.each(METHODS_SUBJECT_TO_COMMITMENT_DEFAULTING)('adds no commitment on calls for `%s`', methodName => {
-                expect(requestTransformer({ methodName, params: [] }).params).not.toContainEqual(
+                expect(patcher([], methodName)).not.toContainEqual(
                     expect.objectContaining({ commitment: expect.anything() }),
                 );
             });
             it('adds no preflight commitment on calls to `sendTransaction`', () => {
-                expect(requestTransformer({ methodName: 'sendTransaction', params: [] }).params).not.toContainEqual(
+                expect(patcher([], 'sendTransaction')).not.toContainEqual(
                     expect.objectContaining({ preflightCommitment: expect.anything() }),
                 );
             });
         });
         describe('with no default commitment set', () => {
-            let requestTransformer: RpcRequestTransformer;
+            let patcher: ReturnType<typeof getDefaultParamsTransformerForSolanaRpc>;
             beforeEach(() => {
-                requestTransformer = getDefaultRequestTransformerForSolanaRpc();
+                patcher = getDefaultParamsTransformerForSolanaRpc();
             });
             it.each(METHODS_SUBJECT_TO_COMMITMENT_DEFAULTING)('sets no commitment on calls to `%s`', methodName => {
-                expect(requestTransformer({ methodName, params: [] }).params).not.toContainEqual(
+                expect(patcher([], methodName)).not.toContainEqual(
                     expect.objectContaining({ commitment: expect.anything() }),
                 );
             });
             it('adds no preflight commitment on calls to `sendTransaction`', () => {
-                expect(requestTransformer({ methodName: 'sendTransaction', params: [] }).params).not.toContainEqual(
+                expect(patcher([], 'sendTransaction')).not.toContainEqual(
                     expect.objectContaining({ preflightCommitment: expect.anything() }),
                 );
             });
@@ -151,8 +143,8 @@ describe('getDefaultRequestTransformerForSolanaRpc', () => {
                             ...new Array(optionsObjectPosition),
                             { commitment: existingCommitment, other: 'property' },
                         ];
-                        const requestTransformer = getDefaultRequestTransformerForSolanaRpc();
-                        expect(requestTransformer({ methodName, params }).params).toStrictEqual([
+                        const patcher = getDefaultParamsTransformerForSolanaRpc();
+                        expect(patcher(params, methodName)).toStrictEqual([
                             ...new Array(optionsObjectPosition).map(() => expect.anything()),
                             { other: 'property' },
                         ]);
@@ -164,8 +156,8 @@ describe('getDefaultRequestTransformerForSolanaRpc', () => {
                             { commitment: existingCommitment },
                             'someParam',
                         ];
-                        const requestTransformer = getDefaultRequestTransformerForSolanaRpc();
-                        expect(requestTransformer({ methodName, params }).params).toStrictEqual([
+                        const patcher = getDefaultParamsTransformerForSolanaRpc();
+                        expect(patcher(params, methodName)).toStrictEqual([
                             ...new Array(optionsObjectPosition).map(() => expect.anything()),
                             undefined,
                             'someParam',
@@ -174,8 +166,8 @@ describe('getDefaultRequestTransformerForSolanaRpc', () => {
                     it('truncates the params on calls to `%s` when there are no other properties left and the config object is the last param', () => {
                         expect.assertions(1);
                         const params = [...new Array(optionsObjectPosition), { commitment: existingCommitment }];
-                        const requestTransformer = getDefaultRequestTransformerForSolanaRpc();
-                        expect(requestTransformer({ methodName, params }).params).toStrictEqual([
+                        const patcher = getDefaultParamsTransformerForSolanaRpc();
+                        expect(patcher(params, methodName)).toStrictEqual([
                             ...new Array(optionsObjectPosition).map(() => expect.anything()),
                         ]);
                     });
@@ -187,8 +179,8 @@ describe('getDefaultRequestTransformerForSolanaRpc', () => {
                         ...new Array(optionsObjectPosition),
                         { other: 'property', preflightCommitment: existingCommitment },
                     ];
-                    const requestTransformer = getDefaultRequestTransformerForSolanaRpc();
-                    expect(requestTransformer({ methodName: 'sendTransaction', params }).params).toStrictEqual([
+                    const patcher = getDefaultParamsTransformerForSolanaRpc();
+                    expect(patcher(params, 'sendTransaction')).toStrictEqual([
                         ...new Array(optionsObjectPosition).map(() => expect.anything()),
                         { other: 'property' },
                     ]);
@@ -201,8 +193,8 @@ describe('getDefaultRequestTransformerForSolanaRpc', () => {
                         { preflightCommitment: existingCommitment },
                         'someParam',
                     ];
-                    const requestTransformer = getDefaultRequestTransformerForSolanaRpc();
-                    expect(requestTransformer({ methodName: 'sendTransaction', params }).params).toStrictEqual([
+                    const patcher = getDefaultParamsTransformerForSolanaRpc();
+                    expect(patcher(params, 'sendTransaction')).toStrictEqual([
                         ...new Array(optionsObjectPosition).map(() => expect.anything()),
                         undefined,
                         'someParam',
@@ -212,57 +204,74 @@ describe('getDefaultRequestTransformerForSolanaRpc', () => {
                     expect.assertions(1);
                     const optionsObjectPosition = OPTIONS_OBJECT_POSITION_BY_METHOD['sendTransaction']!;
                     const params = [...new Array(optionsObjectPosition), { preflightCommitment: existingCommitment }];
-                    const requestTransformer = getDefaultRequestTransformerForSolanaRpc();
-                    expect(requestTransformer({ methodName: 'sendTransaction', params }).params).toStrictEqual([
+                    const patcher = getDefaultParamsTransformerForSolanaRpc();
+                    expect(patcher(params, 'sendTransaction')).toStrictEqual([
                         ...new Array(optionsObjectPosition).map(() => expect.anything()),
                     ]);
                 });
             },
         );
     });
+    // FIXME Remove when https://github.com/anza-xyz/agave/pull/483 is deployed.
+    it.each([undefined, 'processed', 'confirmed', 'finalized'])(
+        'sets the `preflightCommitment` to `processed` when `skipPreflight` is `true` and `preflightCommitment` is `%s` on calls to `sendTransaction`',
+        explicitPreflightCommitment => {
+            const patcher = getDefaultParamsTransformerForSolanaRpc();
+            expect(
+                patcher(
+                    [
+                        null,
+                        {
+                            // eslint-disable-next-line jest/no-conditional-in-test
+                            ...(explicitPreflightCommitment
+                                ? { preflightCommitment: explicitPreflightCommitment }
+                                : null),
+                            skipPreflight: true,
+                        },
+                    ],
+                    'sendTransaction',
+                ),
+            ).toContainEqual(expect.objectContaining({ preflightCommitment: 'processed' }));
+        },
+    );
     describe('given an integer overflow handler', () => {
         let onIntegerOverflow: jest.Mock;
-        let requestTransformer: RpcRequestTransformer;
-        let createRequest = (params: unknown) => ({ methodName: 'getFoo', params });
+        let paramsTransformer: (value: unknown) => unknown;
         beforeEach(() => {
             onIntegerOverflow = jest.fn();
-            requestTransformer = getDefaultRequestTransformerForSolanaRpc({ onIntegerOverflow });
-            createRequest = params => ({ methodName: 'getFoo', params });
+            const patcher = getDefaultParamsTransformerForSolanaRpc({ onIntegerOverflow });
+            paramsTransformer = value => patcher(value, 'getFoo' /* methodName */);
         });
         Object.entries({
             'value above `Number.MAX_SAFE_INTEGER`': BigInt(Number.MAX_SAFE_INTEGER) + 1n,
             'value below `Number.MAX_SAFE_INTEGER`': -BigInt(Number.MAX_SAFE_INTEGER) - 1n,
         }).forEach(([description, value]) => {
             it('calls `onIntegerOverflow` when passed a value ' + description, () => {
-                const request = createRequest(value);
-                requestTransformer(request);
+                paramsTransformer(value);
                 expect(onIntegerOverflow).toHaveBeenCalledWith(
-                    request,
+                    'getFoo',
                     [], // Equivalent to `params`
                     value,
                 );
             });
             it('calls `onIntegerOverflow` when passed a nested array having a value ' + description, () => {
-                const request = createRequest([1, 2, [3, value]]);
-                requestTransformer(request);
+                paramsTransformer([1, 2, [3, value]]);
                 expect(onIntegerOverflow).toHaveBeenCalledWith(
-                    request,
+                    'getFoo',
                     [2, 1], // Equivalent to `params[2][1]`.
                     value,
                 );
             });
             it('calls `onIntegerOverflow` when passed a nested object having a value ' + description, () => {
-                const request = createRequest({ a: 1, b: { b1: 2, b2: value } });
-                requestTransformer(request);
+                paramsTransformer({ a: 1, b: { b1: 2, b2: value } });
                 expect(onIntegerOverflow).toHaveBeenCalledWith(
-                    request,
+                    'getFoo',
                     ['b', 'b2'], // Equivalent to `params.b.b2`.
                     value,
                 );
             });
             it('does not call `onIntegerOverflow` when passed `Number.MAX_SAFE_INTEGER`', () => {
-                const request = createRequest(BigInt(Number.MAX_SAFE_INTEGER));
-                requestTransformer(request);
+                paramsTransformer(BigInt(Number.MAX_SAFE_INTEGER));
                 expect(onIntegerOverflow).not.toHaveBeenCalled();
             });
         });

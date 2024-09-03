@@ -41,36 +41,17 @@ Calling the `send(options)` method on a `PendingRpcRequest` will trigger the req
 
 An object that exposes all of the functions described by `TRpcMethods`, and fulfils them using `TRpcTransport`. Calling each method returns a `PendingRpcRequest<TResponse>` where `TResponse` is that method's response type.
 
-### `RpcRequest`
-
-An object that describes the elements of a JSON RPC request. It consists of the following properties:
-
--   `methodName`: The name of the JSON RPC method to be called.
--   `params`: The parameters to be passed to the JSON RPC method.
-
-### `RpcRequestTransformer`
-
-A function that accepts an `RpcRequest` and returns another `RpcRequest`. This allows the `RpcApi` to transform the request before it is sent to the JSON RPC server.
-
-### `RpcResponse`
-
-A type that represents the response from a JSON RPC server. This could be any sort of data which is why `RpcResponse` defaults to `unknown`. You may use a type parameter to specify the shape of the response — e.g. `RpcResponse<{ result: number }>`.
-
-### `RpcResponseTransformer`
-
-A function that accepts an `RpcResponse` and returns another `RpcResponse`. This allows the `RpcApi` to transform the response before it is returned to the caller.
-
 ### `RpcApi<TRpcMethods>`
 
-For each of `TRpcMethods` this object exposes a method with the same name that maps between its input arguments and a `RpcApiRequestPlan<TResponse>` that describes how to prepare a JSON RPC request to fetch `TResponse`.
+For each of `TRpcMethods` this object exposes a method with the same name that maps between its input arguments and a `RpcRequest<TResponse>` that describes how to prepare a JSON RPC request to fetch `TResponse`.
 
 ### `RpcApiMethods`
 
 This is a marker interface that all RPC method definitions must extend to be accepted for use with the `RpcApi` creator.
 
-### `RpcApiRequestPlan`
+### `RpcRequest`
 
-This type allows an `RpcApi` to describe how a particular request should be issued to the JSON RPC server. Given a function that was called on a `Rpc`, this object gives you the opportunity to:
+This type describes how a particular request should be issued to the JSON RPC server. Given a function that was called on a `Rpc`, this object gives you the opportunity to:
 
 -   customize the JSON RPC method name in the case that it's different than the name of that function
 -   define the shape of the JSON RPC params in case they are different than the arguments provided to that function
@@ -104,23 +85,23 @@ A config object with the following properties:
 
 ### `createRpcApi(config)`
 
-Creates a JavaScript proxy that converts _any_ function call called on it to a `RpcApiRequestPlan` by:
+Creates a JavaScript proxy that converts _any_ function call called on it to a `RpcRequest` by:
 
--   setting `methodName` to the name of the function called, optionally transformed by `config.requestTransformer`.
--   setting `params` to the arguments supplied to that function, optionally transformed by `config.requestTransformer`.
--   setting `responseTransformer` to `config.responseTransformer`, if provided.
+-   setting `methodName` to the name of the function called
+-   setting `params` to the arguments supplied to that function, optionally transformed by `config.parametersTransformer`
+-   setting `responseTransformer` to `config.responseTransformer` or the identity function if no such config exists
 
 ```ts
 // For example, given this `RpcApi`:
 const rpcApi = createRpcApi({
-    requestTransformer: (...rawParams) => rawParams.reverse(),
+    paramsTransformer: (...rawParams) => rawParams.reverse(),
     responseTransformer: response => response.result,
 });
 
 // ...the following function call:
 rpcApi.foo('bar', { baz: 'bat' });
 
-// ...will produce the following `RpcApiRequestPlan` object:
+// ...will produce the following `RpcRequest` object:
 //
 //     {
 //         methodName: 'foo',
@@ -133,5 +114,5 @@ rpcApi.foo('bar', { baz: 'bat' });
 
 A config object with the following properties:
 
--   `requestTransformer<T>(request: RpcRequest<T>): RpcRequest`: An optional function that transforms the `RpcRequest` before it is sent to the JSON RPC server.
--   `responseTransformer<T>(response: RpcResponse, request: RpcRequest): RpcResponse<T>`: An optional function that transforms the `RpcResponse` before it is returned to the caller.
+-   `parametersTransformer<T>(params: T, methodName): unknown`: An optional function that maps between the shape of the arguments an RPC method was called with and the shape of the params expected by the JSON RPC server.
+-   `responseTransformer<T>(response, methodName): T`: An optional function that maps between the shape of the JSON RPC server response for a given method and the shape of the response expected by the `RpcApi`.

@@ -1,6 +1,14 @@
-import { Callable, Flatten, OverloadImplementations, UnionToIntersection } from '@solana/rpc-spec-types';
+import {
+    Callable,
+    createRpcMessage,
+    Flatten,
+    OverloadImplementations,
+    RpcResponse,
+    UnionToIntersection,
+} from '@solana/rpc-spec-types';
 
-import { RpcApi, RpcApiRequestPlan } from './rpc-api';
+import { RpcApi } from './rpc-api';
+import { PendingRpcRequest, RpcRequest, RpcSendOptions } from './rpc-request';
 import { RpcTransport } from './rpc-transport';
 
 export type RpcConfig<TRpcMethods, TRpcTransport extends RpcTransport> = Readonly<{
@@ -11,14 +19,6 @@ export type RpcConfig<TRpcMethods, TRpcTransport extends RpcTransport> = Readonl
 export type Rpc<TRpcMethods> = {
     [TMethodName in keyof TRpcMethods]: PendingRpcRequestBuilder<OverloadImplementations<TRpcMethods, TMethodName>>;
 };
-
-export type PendingRpcRequest<TResponse> = {
-    send(options?: RpcSendOptions): Promise<TResponse>;
-};
-
-export type RpcSendOptions = Readonly<{
-    abortSignal?: AbortSignal;
-}>;
 
 type PendingRpcRequestBuilder<TMethodImplementations> = UnionToIntersection<
     Flatten<{
@@ -63,21 +63,17 @@ function makeProxy<TRpcMethods, TRpcTransport extends RpcTransport>(
 
 function createPendingRpcRequest<TRpcMethods, TRpcTransport extends RpcTransport, TResponse>(
     rpcConfig: RpcConfig<TRpcMethods, TRpcTransport>,
-    pendingRequest: RpcApiRequestPlan<TResponse>,
+    pendingRequest: RpcRequest<TResponse>,
 ): PendingRpcRequest<TResponse> {
     return {
         async send(options?: RpcSendOptions): Promise<TResponse> {
             const { methodName, params, responseTransformer } = pendingRequest;
-            const rawResponse = await rpcConfig.transport<TResponse>(
-                Object.freeze({
-                    methodName,
-                    params,
-                    signal: options?.abortSignal,
-                }),
-            );
-            return responseTransformer
-                ? responseTransformer(rawResponse, Object.freeze({ methodName, params }))
-                : rawResponse;
+            const payload = createRpcMessage(methodName, params);
+            const response = await rpcConfig.transport<RpcResponse<unknown>>({
+                payload,
+                signal: options?.abortSignal,
+            });
+            return (responseTransformer ? responseTransformer(response, methodName) : response) as TResponse;
         },
     };
 }
