@@ -1,5 +1,5 @@
 [![npm][npm-image]][npm-url]
-[![npm-downloads][npm-downloads-image]][npm-url]
+[![npm-downlohttps://github.com/lucentlabz/solana-web3.js/actions/workflows/autolock-inactive-threads.ymlads][npm-downloads-image]][npm-url]
 [![semantic-release][semantic-release-image]][semantic-release-url]
 <br />
 [![code-style-prettier][code-style-prettier-image]][code-style-prettier-url]
