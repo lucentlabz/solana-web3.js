@@ -6,7 +6,7 @@
     "dependencies": {
         "@inquirer/core": "^9.1.0",
         "pino": "^9.4.0",
-        "pino-pretty": "^11.2.2"
+        "pino-pretty": "^12.1.0"
     },
     "devDependencies": {
         "yoctocolors": "^2.1.1"
